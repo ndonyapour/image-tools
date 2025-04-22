@@ -1,0 +1,22 @@
+[project]
+name = "polus-plugins-images-formats-dicom2nifti"
+version = "0.1.0"
+description = "An awesome function."
+authors = [
+    {name = "Nazanin Donyapour", email = "nazanin.donyapour@axleinfo.com"}
+]
+readme = "README.md"
+requires-python = ">=3.9,<3.13"
+dependencies = [
+    "ninja>=1.11.1.4",
+    "cmake>=3.26.0",
+    "scikit-build>=0.16.0",
+    "dcm2niix>=1.0.20241211",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/polus"]
+
+[build-system]
+requires = ["hatchling", "wheel", "scikit-build>=0.16.0", "cmake>=3.26.0", "ninja>=1.11.1.4"]
+build-backend = "hatchling.build"
