@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "polus-images-formats-ome-converter"
-version = "0.3.3"
+version = "0.3.4-dev1"
 description = "Convert BioFormats datatypes to ome.tif or ome.zarr file format"
 authors = [
     "Nick Schaub <nick.schaub@nih.gov>",
@@ -12,11 +12,10 @@ packages = [{include = "polus", from = "src"}]
 
 [tool.poetry.dependencies]
 python = ">=3.9,<3.12"
-bfio = {version = "^2.4.4", extras = ["all"]}
+bfio = {version = "^2.4.7", extras = ["all"]}
 filepattern = "^2.0.4"
 typer = "^0.7.0"
 tqdm = "^4.64.1"
-preadator = "0.4.0-dev2"
 numpy = "<2.0.0"
 
 [tool.poetry.group.dev.dependencies]
@@ -26,6 +25,7 @@ pytest = "^7.2.1"
 ipykernel = "^6.21.2"
 requests = "^2.28.2"
 scikit-image = "^0.19.3"
+matplotlib = "3.9.4"
 
 [build-system]
 requires = ["poetry-core"]
