@@ -1,4 +1,8 @@
 """A wrapper package around basicpy for use as a polus plugin."""
+# IMPORTANT: Apply hyperactive patch BEFORE importing basicpy
+# This fixes the broken EnsembleOptimizer import issue in hyperactive 4.6.1
+from . import hyperactive_patch  # noqa: F401
+
 import logging
 import pathlib
 

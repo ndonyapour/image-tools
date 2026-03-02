@@ -14,7 +14,7 @@ python = ">=3.9,<3.12"
 typer = "^0.7.0"
 tqdm = "^4.64.1"
 numpy = "^1.26.3"
-filepattern = "^2.0.5"
+filepattern = "^2.1.4"
 
 [tool.poetry.group.dev.dependencies]
 bump2version = "^1.0.1"
