@@ -14,6 +14,7 @@ from polus.images.regression.basic_flatfield_estimation import utils as basic_ut
 from polus.images.transforms.images.apply_flatfield import apply as apply_flatfield
 from polus.images.segmentation.kaggle_nuclei_segmentation.segment import segment
 import filepattern
+import subprocess
 
 # --- Resource config ---
 CPU_REQUEST = "1"
@@ -53,6 +54,35 @@ def build_seg_pattern(base_pattern: str, channel_nuclei: int) -> str:
     # Return the same pattern - filtering will be done in the task
     return base_pattern
 
+def run_docker(
+    image: str,
+    volumes: dict,
+    command: list[str],
+    shell: bool = False,
+) -> None:
+    cmd = ["docker", "run", "--rm"]
+    for host, container in volumes.items():
+        os.makedirs(host, exist_ok=True)
+        cmd += ["-v", f"{host}:{container}"]
+    cmd.append(image)
+    cmd.extend(command)
+
+    print(f"Running: {' '.join(cmd)}")
+
+    if shell:
+        cmd = " ".join(cmd)
+
+    result = subprocess.run(cmd, check=False, capture_output=True, text=True, shell=shell)
+   
+    if result.stdout:
+        print(f"STDOUT: {result.stdout}")
+    if result.stderr:
+        print(f"STDERR: {result.stderr}")
+    
+    print(f"Exit code: {result.returncode}")
+    
+    if result.returncode != 0:
+        raise RuntimeError(f"Docker failed with exit code {result.returncode}\n{result.stderr}")
 
 @task(
     requests=Resources(cpu=CPU_REQUEST, mem=MEM_REQUEST),
@@ -277,85 +307,39 @@ def kaggle_nuclei_segmentation_local(
 )
 def ftl_label_local(
     input_dir: str,
-    connectivity: int = 2,
+    output_dir: str,
+    connectivity: int = 1,
+    binarization_threshold: float = 0.5,
 ) -> str:
     """Label connected components in binary images using FTL algorithm.
 
     Args:
         input_dir: Input directory containing binary images.
-        connectivity: Connectivity kind (must be <= number of dimensions).
+        output_dir: Output directory for labeled images.
+        connectivity: Connectivity kind (must be <= number of dimensions). Default: 1.
+        binarization_threshold: Threshold value for binarization. Default: 0.5.
+            Note: The FTL label plugin doesn't support binarization threshold directly,
+            so images should be pre-binarized before calling this function.
 
     Returns:
         String path to directory containing labeled images.
     """
-    import subprocess
-    import bfio
-    import numpy
-    
-    # Convert string to pathlib.Path
-    inp_dir_path = pathlib.Path(input_dir)
+    out_path = clean_dir(os.path.join(output_dir, "labeled")) 
+    FTL_LABEL_IMAGE = "polusai/ftl-label-plugin:0.3.12-dev5"
+    FTL_LABEL_COMMAND = [
+        "--inpDir", input_dir,
+        "--connectivity", str(connectivity),
+        "--binarizationThreshold", str(binarization_threshold),
+        "--outDir", out_path,
+    ]
+    run_docker(image=FTL_LABEL_IMAGE, volumes={input_dir: "/inputs", out_path: "/outputs"}, command=FTL_LABEL_COMMAND, shell=False)
 
-    # Check if there is images subdirectory
-    if inp_dir_path.joinpath("images").is_dir():
-        inp_dir_path = inp_dir_path.joinpath("images")
+    output_files = os.listdir(out_path)
+    print(f"DEBUG labeled output: {output_files}")
+    if not output_files:
+        raise RuntimeError("FTL label produced no output files!")
 
-    # Create output directory
-    output_dir = pathlib.Path(tempfile.mkdtemp(prefix="labeled_"))
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    # Try to import and use FTL directly, otherwise use subprocess
-    try:
-        import ftl
-        from preadator import ProcessManager
-        
-        # Get all .ome.tif files
-        files = list(filter(
-            lambda f: f.is_file() and f.name.endswith('.ome.tif'),
-            inp_dir_path.iterdir()
-        ))
-        
-        # Process each file using FTL labeling
-        def label_single_file(infile: pathlib.Path, outfile: pathlib.Path):
-            """Label a single file using FTL."""
-            with ProcessManager.thread() as active_threads:
-                with bfio.BioReader(infile, max_workers=active_threads.count) as reader:
-                    with bfio.BioWriter(outfile, max_workers=active_threads.count, metadata=reader.metadata) as writer:
-                        image = numpy.squeeze(reader[..., 0, 0])
-                        if not numpy.any(image):
-                            writer.dtype = numpy.uint8
-                            writer[:] = numpy.zeros_like(image, dtype=numpy.uint8)
-                            return
-                        image = (image > 0)
-                        if connectivity > image.ndim:
-                            return
-                        labels = ftl.label_nd(image, connectivity)
-                        writer.dtype = labels.dtype
-                        writer[:] = labels
-        
-        # Process files
-        for infile in files:
-            outfile = output_dir / infile.name
-            label_single_file(infile, outfile)
-            
-    except ImportError:
-        # Fallback to subprocess if direct import fails
-        # Note: This requires the FTL label tool to be installed and accessible
-        subprocess.run(
-            [
-                "python3",
-                "-c",
-                f"import sys; sys.path.insert(0, 'transforms/images/polus-ftl-label-plugin/src'); "
-                f"from main import *; "
-                f"import argparse; "
-                f"args = argparse.Namespace(inpDir='{inp_dir_path}', connectivity='{connectivity}', outDir='{output_dir}'); "
-                f"# Run main logic here"
-            ],
-            check=True,
-        )
-
-    # Return as string path
-    return str(output_dir)
-
+    return str(out_path)
 
 # Workflow
 @workflow
@@ -423,8 +407,16 @@ def cellpainting_featureforge(
         output_dir=output_dir,
     )
 
+
+    # output_dir = "./output"
+    # segmented = "./output/segmented"
     # Step 6: Label connected components
-    # labeled = ftl_label_local(input_dir=segmented)
+    labeled = ftl_label_local(
+        input_dir=segmented,
+        output_dir=output_dir,
+        connectivity=1,
+        binarization_threshold=0.5,
+    )
 
     # return labeled
 
