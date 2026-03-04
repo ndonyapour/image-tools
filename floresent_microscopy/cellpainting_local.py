@@ -62,8 +62,10 @@ def run_docker(
 ) -> None:
     cmd = ["docker", "run", "--rm"]
     for host, container in volumes.items():
-        os.makedirs(host, exist_ok=True)
-        cmd += ["-v", f"{host}:{container}"]
+        # Convert host path to absolute path for Docker volume mounts
+        host_abs = str(pathlib.Path(host).resolve())
+        os.makedirs(host_abs, exist_ok=True)
+        cmd += ["-v", f"{host_abs}:{container}"]
     cmd.append(image)
     cmd.extend(command)
 
@@ -324,15 +326,24 @@ def ftl_label_local(
     Returns:
         String path to directory containing labeled images.
     """
-    out_path = clean_dir(os.path.join(output_dir, "labeled")) 
+    # Convert to absolute paths for Docker volume mounts
+    input_dir_abs = str(pathlib.Path(input_dir).resolve())
+    out_path = clean_dir(os.path.join(output_dir, "labeled"))
+    out_path_abs = str(pathlib.Path(out_path).resolve())
+    
     FTL_LABEL_IMAGE = "polusai/ftl-label-plugin:0.3.12-dev5"
-    FTL_LABEL_COMMAND = [
-        "--inpDir", input_dir,
-        "--connectivity", str(connectivity),
-        "--binarizationThreshold", str(binarization_threshold),
-        "--outDir", out_path,
-    ]
-    run_docker(image=FTL_LABEL_IMAGE, volumes={input_dir: "/inputs", out_path: "/outputs"}, command=FTL_LABEL_COMMAND, shell=False)
+    out_path = clean_dir(os.path.join(output_dir, "labeled")) 
+    run_docker(
+        image=FTL_LABEL_IMAGE,
+        volumes={input_dir_abs: "/inputs", out_path_abs: "/outputs"},
+        command=[
+            "--inpDir", "/inputs",
+            "--connectivity", str(connectivity),
+            "--binarizationThreshold", str(binarization_threshold),
+            "--outDir", "/outputs",
+        ],
+        shell=False,
+    )
 
     output_files = os.listdir(out_path)
     print(f"DEBUG labeled output: {output_files}")
@@ -407,9 +418,6 @@ def cellpainting_featureforge(
         output_dir=output_dir,
     )
 
-
-    # output_dir = "./output"
-    # segmented = "./output/segmented"
     # Step 6: Label connected components
     labeled = ftl_label_local(
         input_dir=segmented,
