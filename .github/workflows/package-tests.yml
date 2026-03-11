@@ -101,7 +101,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-
       - name: Run tests with conda
         if: ${{ hashFiles(format('{0}/environment.yml', matrix.package_dir)) != '' }}
         uses: conda-incubator/setup-miniconda@v2
